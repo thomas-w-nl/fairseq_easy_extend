@@ -6,7 +6,7 @@ task:
   target_lang: en
   noise: random_mask
 criterion:
-  _name: nat_loss
+  _name: rl_loss
 model:
   _name: cmlm_transformer_base
   share_decoder_input_output_embed: true
@@ -35,6 +35,5 @@ optimization:
 checkpoint:
   no_epoch_checkpoints: true
 common:
-  wandb_project: nlp2
   log_format: simple
   log_interval: 100
