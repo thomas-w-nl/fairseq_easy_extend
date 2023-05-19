@@ -14,7 +14,6 @@ from fairseq.logging import metrics
 from sacrebleu.metrics import BLEU, CHRF, TER
 
 
-
 @dataclass
 class RLCriterionConfig(FairseqDataclass):
     sentence_level_metric: str = field(default="bleu",
@@ -31,7 +30,6 @@ class RLCriterion(FairseqCriterion):
         ))
         self.tgt_dict = task.target_dictionary
         self.bleu = BLEU()
-
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -136,28 +134,43 @@ class RLCriterion(FairseqCriterion):
         with torch.no_grad():
             probs = F.softmax(outputs, dim=-1).view(-1, vocab_size)
         sample_idx = torch.multinomial(probs, 1, replacement=True).view(bsz, seq_len)
-        print(sample_idx.shape)
 
-        sampled_sentence_string = self.tgt_dict.string(
-            sample_idx)  # here you might also want to remove tokenization and bpe
+        # sampled_sentence_string = self.tgt_dict.string(
+        #     sample_idx)  # here you might also want to remove tokenization and bpe
 
         # TODO check this the correct way to remove tokenization
-        # sampled_sentence_string = self.decode(sampled_sentence_string)
+        # sampled_sentence_string = self.decode(sample_idx)
 
-        print(sampled_sentence_string)  # --> if you apply mask before, you get a sentence which is one token
+        # print(sampled_sentence_string[0])  # --> if you apply mask before, you get a sentence which is one token
         # imagine output[mask]=[MxV] where M is a sequence of all tokens in batch excluding padding symbols
         # now you sample 1 vocabulary index for each token, so you end up in [Mx1] matrix
         # when you apply string, it treats every token as a separate sentence --> hence you calc token-level metric. SO it makes much more sense to apply mask after sampling(!)
 
-
-        target_sentence = self.tgt_dict.string(targets)
-
-        print("target_sentence", target_sentence)
-        print("sampled_sentence_string", sampled_sentence_string)
+        # target_sentence = self.decode(targets)
 
         ###HERE calculate metric###
         with torch.no_grad():
-            reward = self.bleu.corpus_score(sampled_sentence_string, target_sentence)
+            rewards = []
+            for batch_idx in range(bsz):
+                mask_i = masks[batch_idx]
+                sampled_sentence_string = self.decode(sample_idx[[batch_idx], mask_i])
+                target_sentence = self.decode(targets[[batch_idx], mask_i])
+
+                # print("target_sentence          :", target_sentence[:50])
+                # print("sampled_sentence_string  :", sampled_sentence_string[:50])
+                try:
+                    reward = self.bleu.corpus_score([sampled_sentence_string], [[target_sentence]]).score
+                except IndexError as e:
+                    print("IndexError, mask likely 0 or predicted 0 tokens.")
+                    reward = 0
+                # print(reward)
+                rewards.append(reward)
+
+        rewards = torch.tensor(rewards)
+        # print("sample_idx",sample_idx.shape)
+
+        # print("rewards", rewards.shape)
+        reward = (torch.ones((seq_len, bsz)) * rewards).T.cuda()
         # reward is a number, BLEU, сhrf, etc.
         # expand it to make it of a shape BxT - each token gets the same reward value (e.g. bleu is 20, so each token gets reward of 20 [20,20,20,20,20])
 
@@ -166,12 +179,16 @@ class RLCriterion(FairseqCriterion):
             outputs, targets = outputs[masks], targets[masks]
             reward, sample_idx = reward[masks], sample_idx[masks]
 
-        print("outputs shape", outputs.shape)
-        print("outputs", outputs)
-        log_probs = F.log_probs(outputs, dim=-1)
-        print("Log_probs", log_probs.shape)
-        log_probs_of_samples = torch.gather(...)
-        loss = -log_probs * reward
+        # outputs = 144, 55, vocab_size
+
+        log_probs = torch.log(outputs.view(-1, vocab_size))
+
+        # log_probs = F.log_probs(outputs, dim=-1)
+        log_probs_of_samples = outputs[range(log_probs.shape[0]), sample_idx.ravel()]
+
+        # print("Log_probs", log_probs.shape)
+        # log_probs_of_samples = torch.gather(...)
+        loss = -log_probs_of_samples * reward
         loss = loss.mean()
 
         # For more about mask see notes on NLP2-notes-on-mask
