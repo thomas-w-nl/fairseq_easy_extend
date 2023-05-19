@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 
 from fairseq.logging import metrics
 
+from sacrebleu.metrics import BLEU, CHRF, TER
+
+
 
 @dataclass
 class RLCriterionConfig(FairseqDataclass):
@@ -27,6 +30,8 @@ class RLCriterion(FairseqCriterion):
             tokenizer='moses'
         ))
         self.tgt_dict = task.target_dictionary
+        self.bleu = BLEU()
+
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -147,9 +152,12 @@ class RLCriterion(FairseqCriterion):
 
         target_sentence = self.tgt_dict.string(targets)
 
+        print("target_sentence", target_sentence)
+        print("sampled_sentence_string", sampled_sentence_string)
+
         ###HERE calculate metric###
         with torch.no_grad():
-            reward = eval_metric(sampled_sentence_string, target_sentence)
+            reward = self.bleu.corpus_score(sampled_sentence_string, target_sentence)
         # reward is a number, BLEU, сhrf, etc.
         # expand it to make it of a shape BxT - each token gets the same reward value (e.g. bleu is 20, so each token gets reward of 20 [20,20,20,20,20])
 
