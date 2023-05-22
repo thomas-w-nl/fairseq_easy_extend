@@ -176,20 +176,22 @@ class RLCriterion(FairseqCriterion):
 
         # now you need to apply mask on both outputs and reward
         if masks is not None:
-            probs, targets = probs[masks], targets[masks]
+            probs = probs.view(*outputs.shape)
+            probs = probs[masks]
+            outputs, targets = outputs[masks], targets[masks]
             reward, sample_idx = reward[masks], sample_idx[masks]
 
-        # outputs = 144, 55, vocab_size
+        # probs = 144, 55, vocab_size
 
         # log_probs = torch.log(outputs.view(-1, vocab_size))
 
         # log_probs = F.log_probs(outputs, dim=-1)
-        log_probs_of_samples = torch.gather(torch.log(probs), 2, sample_idx.unsqueeze(1))
+        log_probs_of_samples = torch.gather(torch.log(probs), 2, sample_idx.unsqueeze(2))
         # log_probs_of_samples = outputs[range(log_probs.shape[0]), sample_idx.ravel()]
 
         # print("Log_probs", log_probs.shape)
         # log_probs_of_samples = torch.gather(...)
-        loss = -log_probs_of_samples * reward
+        loss = -log_probs_of_samples * reward.unsqueeze(1)
         loss = loss.mean()
 
         # For more about mask see notes on NLP2-notes-on-mask
