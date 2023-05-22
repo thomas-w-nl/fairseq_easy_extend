@@ -131,9 +131,8 @@ class RLCriterion(FairseqCriterion):
         bsz = outputs.size(0)
         seq_len = outputs.size(1)
         vocab_size = outputs.size(2)
-        with torch.no_grad():
-            probs = F.softmax(outputs, dim=-1).view(-1, vocab_size)
-        sample_idx = torch.multinomial(probs, 1, replacement=True).view(bsz, seq_len)
+        probs = F.softmax(outputs, dim=-1).view(-1, vocab_size)
+        sample_idx = torch.multinomial(probs.detach(), 1, replacement=True).view(bsz, seq_len)
 
         # sampled_sentence_string = self.tgt_dict.string(
         #     sample_idx)  # here you might also want to remove tokenization and bpe
@@ -183,14 +182,10 @@ class RLCriterion(FairseqCriterion):
 
         # probs = 144, 55, vocab_size
 
-        # log_probs = torch.log(outputs.view(-1, vocab_size))
+        log_probs = torch.log(probs)
 
-        # log_probs = F.log_probs(outputs, dim=-1)
-        log_probs_of_samples = torch.gather(torch.log(probs), 2, sample_idx.unsqueeze(2))
-        # log_probs_of_samples = outputs[range(log_probs.shape[0]), sample_idx.ravel()]
+        log_probs_of_samples = torch.gather(log_probs, 1, sample_idx.unsqueeze(1))
 
-        # print("Log_probs", log_probs.shape)
-        # log_probs_of_samples = torch.gather(...)
         loss = -log_probs_of_samples * reward.unsqueeze(1)
         loss = loss.mean()
 
