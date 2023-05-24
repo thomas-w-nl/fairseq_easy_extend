@@ -21,7 +21,7 @@ class RLCriterionConfig(FairseqDataclass):
                                        metadata={"help": "sentence level metric"})
 
 
-@register_criterion("rl_loss", dataclass=RLCriterionConfig)
+@register_criterion("rl_cosine", dataclass=RLCriterionConfig)
 class RLCriterion(FairseqCriterion):
     def __init__(self, task, sentence_level_metric):
         super().__init__(task)
