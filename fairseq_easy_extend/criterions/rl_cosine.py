@@ -126,10 +126,11 @@ class RLCriterion(FairseqCriterion):
         tgt_embeddings = model.decoder.embed_tokens(targets)
         tgt_embeddings = tgt_embeddings[masks]  # Ntokens x 512
 
-        reward = sim_fn(sample_embeddings, tgt_embeddings)  # shape: (Ntokens,)
+        reward_raw = sim_fn(sample_embeddings, tgt_embeddings)  # shape: (Ntokens,)
 
 
-
+        # Reward scaling
+        reward = reward_raw
 
 
         # now you need to apply mask on both outputs and reward
@@ -150,7 +151,7 @@ class RLCriterion(FairseqCriterion):
 
         # For more about mask see notes on NLP2-notes-on-mask
 
-        return loss, reward.mean()
+        return loss, reward_raw.mean()
 
     @staticmethod
     def reduce_metrics(logging_outputs) -> None:
