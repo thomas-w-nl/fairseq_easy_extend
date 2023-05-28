@@ -126,11 +126,14 @@ class RLCriterion(FairseqCriterion):
         tgt_embeddings = model.decoder.embed_tokens(targets)
         tgt_embeddings = tgt_embeddings[masks]  # Ntokens x 512
 
-        reward_raw = sim_fn(sample_embeddings, tgt_embeddings)  # shape: (Ntokens,)
+        reward = sim_fn(sample_embeddings, tgt_embeddings)  # shape: (Ntokens,)
 
+        # log raw reward before scaling
+        reward_raw = torch.clone(reward).detach()
 
-        # Reward scaling
-        reward = reward_raw
+        # reward scaling
+        # reward += 2
+        # reward /= 3
 
 
         # now you need to apply mask on both outputs and reward
